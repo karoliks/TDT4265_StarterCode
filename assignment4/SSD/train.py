@@ -16,11 +16,19 @@ from torch.optim.lr_scheduler import ChainedScheduler
 from omegaconf import OmegaConf
 torch.backends.cudnn.benchmark = True
 
+# Early stop from assignment 1
+def should_early_stop(loss_history, num_steps=10):
+    relevant = loss_history[-(num_steps+1):]
+    if len(relevant) < num_steps:
+        return
+    return min(relevant) == relevant[0] 
+
 def train_epoch(
         model, scaler: torch.cuda.amp.GradScaler,
         optim, dataloader_train, scheduler,
         gpu_transform: torch.nn.Module,
-        log_interval: int):
+        log_interval: int,
+        loss_history):
     grad_scale = scaler.get_scale()
     for batch in tqdm.tqdm(dataloader_train, f"Epoch {logger.epoch()}"):
         batch = tops.to_cuda(batch)
@@ -30,7 +38,13 @@ def train_epoch(
         with torch.cuda.amp.autocast(enabled=tops.AMP()):
             bbox_delta, confs = model(batch["image"])
             loss, to_log = model.loss_func(bbox_delta, confs, batch["boxes"], batch["labels"])
-        scaler.scale(loss).backward()
+        
+        # Early stopping from assignemnt 1
+        if should_early_stop(loss_history, num_steps=10):
+            print("early stop at:", epoch)
+            return True
+            
+        scaler.scale(loss).backward() 
         scaler.step(optim)
         scaler.update()
         optim.zero_grad()
@@ -47,8 +61,10 @@ def train_epoch(
         # torch.cuda.amp skips gradient steps if backward pass produces NaNs/infs.
         # If it happens in the first iteration, scheduler.step() will throw exception
         logger.step()
+        
+       
 
-    return
+    return False
 
 
 def print_config(cfg):
@@ -63,6 +79,7 @@ def print_config(cfg):
 @click.argument("config_path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
 @click.option("--evaluate-only", default=False, is_flag=True, help="Only run evaluation, no training.")
 def train(config_path: Path, evaluate_only: bool):
+    early_stop = False  # todo legge inn som argument?
     logger.logger.DEFAULT_SCALAR_LEVEL = logger.logger.DEBUG
     cfg = utils.load_config(config_path)
     print_config(cfg)
@@ -101,9 +118,12 @@ def train(config_path: Path, evaluate_only: bool):
     dummy_input = tops.to_cuda(torch.randn(1, cfg.train.image_channels, *cfg.train.imshape))
     tops.print_module_summary(model, (dummy_input,))
     start_epoch = logger.epoch()
+    
+    loss_history = []
+    
     for epoch in range(start_epoch, cfg.train.epochs):
         start_epoch_time = time.time()
-        train_epoch(model, scaler, optimizer, dataloader_train, scheduler, gpu_transform_train, cfg.train.log_interval)
+        should_stop = train_epoch(model, scaler, optimizer, dataloader_train, scheduler, gpu_transform_train, cfg.train.log_interval, loss_history)
         end_epoch_time = time.time() - start_epoch_time
         total_time += end_epoch_time
         logger.add_scalar("stats/epoch_time", end_epoch_time)
@@ -114,6 +134,11 @@ def train(config_path: Path, evaluate_only: bool):
         train_state = dict(total_time=total_time)
         checkpointer.save_registered_models(train_state)
         logger.step_epoch()
+        
+        if early_stop and should_stop:
+            break
+        
+                
     logger.add_scalar("stats/total_time", total_time)
 
 

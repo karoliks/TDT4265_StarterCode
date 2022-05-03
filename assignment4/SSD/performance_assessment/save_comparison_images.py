@@ -10,6 +10,17 @@ from vizer.draw import draw_boxes
 from ssd import utils
 from tqdm import tqdm
 from ssd.data.transforms import ToTensor
+from pytorch_grad_cam import AblationCAM, EigenCAM
+from pytorch_grad_cam.utils.image import show_cam_on_image, scale_accross_batch_and_channels, scale_cam_image
+import torch
+
+def fasterrcnn_reshape_transform(x):
+    target_size = x['pool'].size()[-2 : ]
+    activations = []
+    for key, value in x.items():
+        activations.append(torch.nn.functional.interpolate(torch.abs(value), target_size, mode='bilinear'))
+    activations = torch.cat(activations, axis=1)
+    return activations
 
 
 def get_config(config_path):
@@ -26,6 +37,8 @@ def get_trained_model(cfg):
     ckpt = load_checkpoint(cfg.output_dir.joinpath("checkpoints"), map_location=tops.get_device())
     model.load_state_dict(ckpt["model"])
     return model
+
+
 
 
 def get_dataloader(cfg, dataset_to_visualize):
@@ -77,6 +90,39 @@ def visualize_model_predictions_on_image(image, img_transform, batch, model, lab
     return image_with_predicted_boxes
 
 
+def visualize_cam_on_image(image, img_transform, batch, model, label_map, score_threshold):
+    target_layers = [model]#todo backobe?
+    targets = label_map
+    cam = EigenCAM(model,
+                   target_layers, 
+                   use_cuda=torch.cuda.is_available(),
+                   reshape_transform=fasterrcnn_reshape_transform)
+
+#     grayscale_cam = cam(batch, targets=targets)
+    
+#     # Take the first image in the batch:
+    grayscale_cam = grayscale_cam[0, :]
+    cam_image = show_cam_on_image(image, grayscale_cam, use_rgb=True)
+    
+    # And lets draw the boxes again:
+#     image_with_bounding_boxes = draw_boxes(boxes, labels, classes, cam_image)
+#     Image.fromarray(image_with_bounding_boxes)
+    
+    
+    
+    
+    
+    pred_image = tops.to_cuda(batch["image"])
+    transformed_image = img_transform({"image": pred_image})["image"]
+
+    boxes, categories, scores = model(transformed_image, score_threshold=score_threshold)[0]
+    boxes = convert_boxes_coords_to_pixel_coords(boxes.detach().cpu(), batch["width"], batch["height"])
+    categories = categories.cpu().numpy().tolist()
+
+    image_with_predicted_boxes = draw_boxes(cam_image, boxes, categories, scores, class_name_map=label_map)
+    return image_with_predicted_boxes
+
+
 def create_filepath(save_folder, image_id):
     filename = "image_" + str(image_id) + ".png"
     return os.path.join(save_folder, filename)
@@ -87,11 +133,13 @@ def create_comparison_image(batch, model, img_transform, label_map, score_thresh
     image_with_annotations = visualize_annotations_on_image(image, batch, label_map)
     image_with_model_predictions = visualize_model_predictions_on_image(
         image, img_transform, batch, model, label_map, score_threshold)
-
+    image_with_cam = visualize_cam_on_image(
+        image, img_transform, batch, model, label_map, score_threshold)
     concatinated_image = np.concatenate([
         image,
         image_with_annotations,
-        image_with_model_predictions
+        image_with_model_predictions,
+        image_with_cam
     ], axis=0)
     return concatinated_image
 
