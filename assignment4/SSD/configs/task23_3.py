@@ -1,5 +1,5 @@
 import torchvision
-from .task23_2 import ( # TODO endre hvis mer data augmentation
+from .task23_2 import (
     train,
     optimizer,
     schedulers,

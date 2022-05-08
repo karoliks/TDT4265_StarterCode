@@ -30,3 +30,9 @@ model = L(RetinaNet)(
     num_classes=8+1,  # Add 1 for background
     anchor_prob_initialization=True # A way to turn off and on the improved wheught initialization
 )
+
+from .utils import get_dataset_dir
+data_train.dataset.img_folder = get_dataset_dir("tdt4265_2022_updated")
+data_train.dataset.annotation_file = get_dataset_dir("tdt4265_2022_updated/train_annotations.json")
+data_val.dataset.img_folder = get_dataset_dir("tdt4265_2022_updated")
+data_val.dataset.annotation_file = get_dataset_dir("tdt4265_2022_updated/val_annotations.json")

@@ -44,6 +44,8 @@ def matplotlib_imshow(img, one_channel=False):
 
     
 def analyze_something(dataloader, cfg, writer):
+    img_h = 128
+    img_w = 1024
     images = []
     boxes = {}
     dic = {}
@@ -78,6 +80,9 @@ def analyze_something(dataloader, cfg, writer):
     person_area=[]
     rider_area = []
     
+    heights = [[],[],[],[],[],[],[],[],[]]
+    widths = [[],[],[],[],[],[],[],[],[]]
+    
     label_names = ['background', 'car','truck', 'bus', 'motorcycle','bicycle', 'scooter','person','rider']
     
     x=0
@@ -97,55 +102,65 @@ def analyze_something(dataloader, cfg, writer):
         image_size_info= (batch["image"].size())
 #         aspect_ratios.append(image_size_info[3]/image_size_info[2])
 #         print("boxes utenfor", boxes)
-        for box in boxes[0]:
-            #  [x_min, y_min, x_max, y_max]
-            h = box[2]-box[0]
-            w=box[3]-box[1]
-            aspect_ratios.append(w/h)
+        for outer in boxes:
+            for box in outer:
+                #  [x_min, y_min, x_max, y_max]
+                w = (box[2]-box[0])*img_w
+                h=(box[3]-box[1])*img_h
+#                 print("w", w)
+#                 print("h", h)
+#                 print("w/h", w/h)
+                aspect_ratios.append(w/h)
 
-        for i, label in enumerate(labels.tolist()[0]):
-            # add box with the label to the list of that kind of boxes
-#             print("label:",label)
-#             print("boxes innenfor", boxes[0][i])
-            h = boxes[0][i][2]-boxes[0][i][0]
-            w = boxes[0][i][3]-boxes[0][i][1]
-    
-            if label == 0:
-                background.append(boxes[0][i])
-                background_ar.append(w/h)
-                background_area.append(w*h)
-            if label == 1:
-                car.append(boxes[0][i])
-                car_ar.append(w/h)
-                car_area.append(w*h)
-            if label == 2:
-                truck.append(boxes[0][i])
-                truck_ar.append(w/h)
-                truck_area.append(w*h)
-            if label == 3:
-                bus.append(boxes[0][i])
-                bus_ar.append(w/h)
-                bus_area.append(w*h)
-            if label == 4:
-                motorcycle.append(boxes[0][i])
-                motorcycle_ar.append(w/h)
-                motorcycle_area.append(w*h)
-            if label == 5:
-                bicycle.append(boxes[0][i])
-                bicycle_ar.append(w/h)
-                bicycle_area.append(w*h)
-            if label == 6:
-                scooter.append(boxes[0][i])
-                scooter_ar.append(w/h)
-                scooter_area.append(w*h)
-            if label == 7:
-                person.append(boxes[0][i])
-                person_ar.append(w/h)
-                person_area.append(w*h)
-            if label == 8:
-                rider.append(boxes[0][i])
-                rider_ar.append(w/h)
-                rider_area.append(w*h)
+            for i, label in enumerate(labels.tolist()[0]):
+                # add box with the label to the list of that kind of boxes
+    #             print("label:",label)
+    #             print("boxes innenfor", boxes[0][i])
+                w = (outer[i][2]-outer[i][0])*img_w
+                h = (outer[i][3]-outer[i][1])*img_h
+                heights[label].append(h)
+                widths[label].append(w)
+
+                if label == 0:
+                    background.append(outer[i])
+                    background_ar.append(w/h)
+                    background_area.append(w*h)
+                if label == 1:
+                    car.append(outer[i])
+                    car_ar.append(w/h)
+                    car_area.append(w*h)
+                if label == 2:
+                    truck.append(outer[i])
+                    truck_ar.append(w/h)
+                    truck_area.append(w*h)
+                if label == 3:
+#                     print("bus!", "w", w, "h", h, "W*h", w*h)
+                    
+                    bus.append(outer[i])
+                    bus_ar.append(w/h)
+                    bus_area.append(w*h)
+                if label == 4:
+                    motorcycle.append(outer[i])
+                    motorcycle_ar.append(w/h)
+                    motorcycle_area.append(w*h)
+                if label == 5:
+                    bicycle.append(outer[i])
+                    bicycle_ar.append(w/h)
+                    bicycle_area.append(w*h)
+                if label == 6:
+                    scooter.append(outer[i])
+                    scooter_ar.append(w/h)
+                    scooter_area.append(w*h)
+                if label == 7:
+                    person.append(outer[i])
+                    person_ar.append(w/h)
+                    person_area.append(w*h)
+                if label == 8:
+#                     print("rider!", "w", w, "h", h, "W*h", w*h)
+                    
+                    rider.append(outer[i])
+                    rider_ar.append(w/h)
+                    rider_area.append(w*h)
                 
 #         x+=1
 #         if x>10:
@@ -182,42 +197,117 @@ def analyze_something(dataloader, cfg, writer):
     ax1.set_xticklabels(label_names)
     fig.savefig('dataset_exploration/bars-test.png')
     
+    
+    
+    
     fig_hist = plt.figure(1)
     plt.hist(aspect_ratios, bins=100)
     plt.xlabel("Aspect ratios")
     plt.ylabel("Count")
     fig_hist.savefig('dataset_exploration/hist-test.png')
     
+    
     fig_label_ar = plt.figure(2,figsize=(20,10))
-    ars = [car_ar,bus_ar,background_ar,truck_ar,motorcycle_ar,bicycle_ar,scooter_ar,person_ar,rider_ar]
+    ars = [background_ar, car_ar,truck_ar,bus_ar,motorcycle_ar,bicycle_ar,scooter_ar,person_ar,rider_ar]
     means = []
+    min_ars = []
+    max_ars = []
     for ar in ars:
         if len(ar):
             means.append(mean(ar))
+            min_ars.append(min(ar))
+            max_ars.append(max(ar))
         else:
             means.append(0)
+            min_ars.append(0)
+            max_ars.append(0)
+    ind = np.arange(9)
+    width = 0.27
     
 #     mean_result = [mean(car_ar),mean(bus_ar),(background_ar),mean(truck_ar),mean(motorcycle_ar),mean(bicycle_ar),mean(scooter_ar),mean(person_ar),mean(rider_ar)]
-    plt.bar(label_names,means)
+    print("mean aspect ratios", means)
+    plt.bar(ind-width,min_ars, width=width,color='b', align='center')
+    plt.bar(ind,means, width=width, color='g', align='center')
+    plt.bar(ind+width,max_ars, width=width, color='r', align='center')
     plt.xlabel("Labels")
-    plt.ylabel("Aspect ratio mean")
+    plt.ylabel("Aspect ratio")
+    plt.legend(["Minimum aspect ratio", "Average aspect ratio", "Maximum aspect ratio"])
+    plt.xticks(ind, labels=label_names)
     fig_label_ar.savefig('dataset_exploration/ar-mean-test.png')
     
     fig_mean_area = plt.figure(3,figsize=(20,10))
-    areas = [car_area,bus_area,background_area,truck_area,motorcycle_area,bicycle_area,scooter_area,person_area,rider_area]
+    areas = [background_area,car_area,truck_area,bus_area,motorcycle_area,bicycle_area,scooter_area,person_area,rider_area]
     means_area = []
     for area in areas:
         if len(area):
+#             print("length of area list:", len(area))
             means_area.append(mean(area))
         else:
             means_area.append(0)
     
     plt.bar(label_names,means_area)
+    print("mean area:", means_area)
 
     
     plt.xlabel("Labels")
     plt.ylabel("Mean area")
     fig_mean_area.savefig('dataset_exploration/area-mean-test.png')
+
+    
+    mean_heights=[]
+    min_heights=[]
+    max_heights=[]
+    
+    for label_heights in heights:
+        if len(label_heights):
+#             print("length of area list:", len(area))
+            mean_heights.append(mean(label_heights))
+            min_heights.append(min(label_heights))
+            max_heights.append(max(label_heights))
+        else:
+            mean_heights.append(0)
+            min_heights.append(0)
+            max_heights.append(0)
+    print("heights", mean_heights)
+    fig_hist = plt.figure(4,figsize=(20,10))
+    plt.bar(ind-width,min_heights, width=width,color='b', align='center')
+    plt.bar(ind,mean_heights, width=width, color='g', align='center')
+    plt.bar(ind+width,max_heights, width=width, color='r', align='center')
+    plt.xlabel("Labels")
+    plt.ylabel("Height")
+    plt.legend(["Minimum", "Average", "Maximum"])
+    plt.xticks(ind, labels=label_names)
+    fig_hist.savefig('dataset_exploration/height-test.png')
+    
+    
+    
+    
+    mean_widths=[]
+    min_widths=[]
+    max_widths=[]
+    for label_widhts in widths:
+#         print(label_widhts)
+        if len(label_widhts):
+            mean_widths.append(mean(label_widhts))
+            min_widths.append(min(label_widhts))
+            max_widths.append(max(label_widhts))
+        else:
+            mean_widths.append(0)
+            min_widths.append(0)
+            max_widths.append(0)
+            
+    print("mean widths", mean_widths)
+    
+    fig_width = plt.figure(5,figsize=(20,10))
+    plt.bar(ind-width,min_widths, width=width,color='b', align='center')
+    plt.bar(ind,mean_widths, width=width, color='g', align='center')
+    plt.bar(ind+width,max_widths, width=width, color='r', align='center')
+    plt.xlabel("Labels")
+    plt.ylabel("Width")
+    plt.legend(["Minimum", "Average", "Maximum"])
+    plt.xticks(ind, labels=label_names)
+    fig_width.savefig('dataset_exploration/width-test.png')
+    
     
     
 

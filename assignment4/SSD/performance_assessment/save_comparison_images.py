@@ -11,15 +11,23 @@ from ssd import utils
 from tqdm import tqdm
 from ssd.data.transforms import ToTensor
 from pytorch_grad_cam import AblationCAM, EigenCAM
+# from pytorch_grad_cam.utils import fasterrcnn_reshape_transform
 from pytorch_grad_cam.utils.image import show_cam_on_image, scale_accross_batch_and_channels, scale_cam_image
 import torch
+from torchvision.models import resnet34
+import inspect
+from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
+import torch as nn
 
 def fasterrcnn_reshape_transform(x):
-    target_size = x['pool'].size()[-2 : ]
+    print("X: ", x.keys())
+    print(x['feat5'].size())
+    target_size = x['feat5'].size()[-2 : ]
     activations = []
     for key, value in x.items():
         activations.append(torch.nn.functional.interpolate(torch.abs(value), target_size, mode='bilinear'))
     activations = torch.cat(activations, axis=1)
+    print(activations.size())
     return activations
 
 
@@ -37,7 +45,6 @@ def get_trained_model(cfg):
     ckpt = load_checkpoint(cfg.output_dir.joinpath("checkpoints"), map_location=tops.get_device())
     model.load_state_dict(ckpt["model"])
     return model
-
 
 
 
@@ -89,32 +96,47 @@ def visualize_model_predictions_on_image(image, img_transform, batch, model, lab
     image_with_predicted_boxes = draw_boxes(image, boxes, categories, scores, class_name_map=label_map)
     return image_with_predicted_boxes
 
+def visualize_cam_on_image(image, img_transform, batch, model, label_map, score_threshold, cfg):
+#     target_layers = model.feature_extractor                     #Get the fpn model
+#     target_layers = target_layers.resnet[-1]                    # Want to visualize the last layer in resnet
 
-def visualize_cam_on_image(image, img_transform, batch, model, label_map, score_threshold):
-    target_layers = [model]#todo backobe?
-    targets = label_map
-    cam = EigenCAM(model,
-                   target_layers, 
-                   use_cuda=torch.cuda.is_available(),
-                   reshape_transform=fasterrcnn_reshape_transform)
 
-#     grayscale_cam = cam(batch, targets=targets)
+    backbone = model.feature_extractor.fpn
+
+    model_resnet = resnet34(pretrained=True)
+    model_res = model
+#     print(model_res)
+#     print("min",model.feature_extractor.fpn.layer_blocks[-1])
+
+    print("model type:", type(model_res))
+
+    print("resnet model type:", type(model_resnet))
+    resnet_layers = [model_resnet.layer4[-1]]    
+    print("resnet_target_layers type:", type(resnet_layers))
+    print("resnet_target_layers 0 type:", type(resnet_layers[0]))
     
-#     # Take the first image in the batch:
+    
+    
+    target_layers = [model.feature_extractor.fpn.layer_blocks[-1]]
+    print("target layers type", type(target_layers))
+    print("target layers 0 type" , type(target_layers[0]))
+
+#     print("backbone:", model.backbone)
+
+
+#     target_layers = [model_res.layer4[-1]]
+    cam = EigenCAM(model_res.eval(),                                    # Define the Cam model
+            [backbone], 
+            use_cuda=nn.cuda.is_available(),
+             reshape_transform=fasterrcnn_reshape_transform
+    )
+    img = batch["image"][0].cpu().numpy().tolist()
+    grayscale_cam = cam(batch["image"])                      #Make the greyscale img
     grayscale_cam = grayscale_cam[0, :]
-    cam_image = show_cam_on_image(image, grayscale_cam, use_rgb=True)
-    
-    # And lets draw the boxes again:
-#     image_with_bounding_boxes = draw_boxes(boxes, labels, classes, cam_image)
-#     Image.fromarray(image_with_bounding_boxes)
-    
-    
-    
-    
+    cam_image = show_cam_on_image(np.transpose(img, (1,2,0)), grayscale_cam, use_rgb=True)
     
     pred_image = tops.to_cuda(batch["image"])
     transformed_image = img_transform({"image": pred_image})["image"]
-
     boxes, categories, scores = model(transformed_image, score_threshold=score_threshold)[0]
     boxes = convert_boxes_coords_to_pixel_coords(boxes.detach().cpu(), batch["width"], batch["height"])
     categories = categories.cpu().numpy().tolist()
@@ -123,23 +145,61 @@ def visualize_cam_on_image(image, img_transform, batch, model, label_map, score_
     return image_with_predicted_boxes
 
 
+# def visualize_cam_on_image(image, img_transform, batch, model, label_map, score_threshold):
+#     target_layers = [model.feature_extractor.fpn]#todo backobe?
+# #     print(resnet34(pretrained=True))
+# #     print("model",model.feature_extractor.fpn)
+# #     print(inspect.getmembers(model, lambda a:not(inspect.isroutine(a))))
+#     targets = label_map
+#     cam = EigenCAM(model,
+#                    target_layers,
+#                    use_cuda=torch.cuda.is_available())
+# #                    reshape_transform=fasterrcnn_reshape_transform)
+#     cam.uses_gradients=False
+#     print(batch["image"].cuda())
+#     grayscale_cam = cam(batch["image"],[ClassifierOutputTarget(targets)] )
+
+#     # Take the first image in the batch:
+#     grayscale_cam = grayscale_cam[0, :]
+#     cam_image = show_cam_on_image(image, grayscale_cam, use_rgb=True)
+
+#     # And lets draw the boxes again:
+# #     image_with_bounding_boxes = draw_boxes(boxes, labels, classes, cam_image)
+# #     Image.fromarray(image_with_bounding_boxes)
+
+
+#     cam_image = image
+
+
+#     pred_image = tops.to_cuda(batch["image"])
+#     transformed_image = img_transform({"image": pred_image})["image"]
+
+#     boxes, categories, scores = model(transformed_image, score_threshold=score_threshold)[0]
+#     boxes = convert_boxes_coords_to_pixel_coords(boxes.detach().cpu(), batch["width"], batch["height"])
+#     categories = categories.cpu().numpy().tolist()
+
+#     image_with_predicted_boxes = draw_boxes(cam_image, boxes, categories, scores, class_name_map=label_map)
+#     return image_with_predicted_boxes
+    return
+
+
 def create_filepath(save_folder, image_id):
     filename = "image_" + str(image_id) + ".png"
     return os.path.join(save_folder, filename)
 
 
-def create_comparison_image(batch, model, img_transform, label_map, score_threshold):
+def create_comparison_image(batch, model, img_transform, label_map, score_threshold, cfg):
     image = convert_image_to_hwc_byte(batch["image"])
     image_with_annotations = visualize_annotations_on_image(image, batch, label_map)
     image_with_model_predictions = visualize_model_predictions_on_image(
         image, img_transform, batch, model, label_map, score_threshold)
-    image_with_cam = visualize_cam_on_image(
-        image, img_transform, batch, model, label_map, score_threshold)
+#     image_with_cam = visualize_cam_on_image(
+#         image, img_transform, batch, model, label_map, score_threshold, cfg)
     concatinated_image = np.concatenate([
         image,
         image_with_annotations,
-        image_with_model_predictions,
-        image_with_cam
+        image_with_model_predictions
+#         image_with_cam
     ], axis=0)
     return concatinated_image
 
@@ -156,7 +216,7 @@ def create_and_save_comparison_images(dataloader, model, cfg, save_folder, score
     img_transform = instantiate(cfg.data_val.gpu_transform)
     for i in tqdm(range(num_images_to_save)):
         batch = next(dataloader)
-        comparison_image = create_comparison_image(batch, model, img_transform, cfg.label_map, score_threshold)
+        comparison_image = create_comparison_image(batch, model, img_transform, cfg.label_map, score_threshold, cfg)
         filepath = create_filepath(save_folder, i)
         cv2.imwrite(filepath, comparison_image[:, :, ::-1])
 

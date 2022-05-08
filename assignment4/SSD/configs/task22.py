@@ -21,14 +21,13 @@ from ssd.data.transforms import (
     ToTensor, Normalize, Resize,
     GroundTruthBoxesToAnchors, RandomHorizontalFlip)
 
-# TODO inspo https://piazza.com/class/kyipdksfp9q1dn?cid=389
 
 # be careful when looking at aguemtneation from torchvisoin. a lot are for images and not lidar data. TODO fjerne kommentar
 train_cpu_transform = L(torchvision.transforms.Compose)(transforms=[
     L(ToTensor)(),
         # you cannot repalce this with torchiviosn resize. need to wrap it(?) TODO fjerne kommentar
-    L(RandomHorizontalFlip)(),
     L(Resize)(imshape="${train.imshape}"),
+    L(RandomHorizontalFlip)(p=0.5),
     
         # all augmentetaion have to be done before this last line TODO fjerne kommentar
     L(GroundTruthBoxesToAnchors)(anchors="${anchors}", iou_threshold=0.5),

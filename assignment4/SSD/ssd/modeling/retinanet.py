@@ -22,13 +22,9 @@ class RetinaNet(nn.Module):
         self.loss_func = loss_objective
         self.num_classes = num_classes
         self.anchor_prob_initialization = anchor_prob_initialization
-#         self.regression_heads = []
-#         self.classification_heads = []
-        
-        #####
 
         # Using constant amount of boxes
-        self.n_boxes = 6 # TODO finne ut av dette tallet
+        self.n_boxes = 6 
         n_channels = 256
         
         
@@ -107,73 +103,27 @@ class RetinaNet(nn.Module):
         )
         
         
-        
-        
-#         # Initialize output heads that are applied to each feature map from the backbone.
-#         for n_boxes, out_ch in zip(anchors.num_boxes_per_fmap, self.feature_extractor.out_channels):
-#             print("n_boxes", n_boxes, "out_ch", out_ch)
-#             self.regression_heads.append(nn.Conv2d(out_ch, n_boxes * 4, kernel_size=3, padding=1))
-#             self.classification_heads.append(nn.Conv2d(out_ch, n_boxes * self.num_classes, kernel_size=3, padding=1))
-
-        #####
-        
-#         self.regression_heads = nn.ModuleList(self.regression_heads)
-#         self.classification_heads = nn.ModuleList(self.classification_heads)
         self.anchor_encoder = AnchorEncoder(anchors)
         self._init_weights()
 
     def _init_weights(self):
-        if self.anchor_prob_initialization: # TODO hvilken vei skal if-ene være?
-#             print(self.regression_head[-1].bias.data)
-            
+        if self.anchor_prob_initialization:
             heads = [*[self.regression_head], *[self.classification_head]]
-    #         layers = [*self.regression_heads, *self.classification_heads]
-            for head in heads: # TODO droppe denne og droppe et hakk i listen?
+            for head in heads:
                 for param in head.parameters():
                     # Initilaze wheights
                     # All new conv layers except the final one in the RetinaNet subnets are initialized with bias b = 0 and a Gaussian weight fill with σ = 0.01
                     if param.dim() > 1: nn.init.normal_(param, std=0.01)
-#                 print("head:", head)
                 for layer in head:
                     if hasattr(layer, "bias"): 
-#                         print(" bias layer before:",layer, layer.bias)
                         # Make all the biases zero
                         nn.init.constant_(layer.bias.data, 0.)
-#                         print(" bias layer after:",layer, layer.bias)
-#                         print()
         # final conv layer of the classification subnet, we set the bias initialization to what was specified
             nn.init.constant_(self.classification_head[-1].bias.data[0:self.n_boxes], math.log(self.p*(self.num_classes-1)/(1-self.p)))
-#             print("self.classification_head[-1].bias", self.classification_head[-1].bias)
-        
-
-#             print("self.classification_head[0]",self.classification_head[0])
-
-            # initialize the weight with gaussian
-#             for param in self.classification_head.parameters():
-#                 if param.dim() > 1: nn.init.normal_(param)
-
-#             for param in self.regression_head.parameters():
-#                 if param.dim() > 1: nn.init.normal_(param)
-
-
-#             nn.init.constant_(self.regression_head[-1].bias.data, 0.)
-#             nn.init.constant_(self.classification_head[-1].bias.data, 0.)
-#             nn.init.constant_(self.classification_head[-1].bias.data[0:self.n_boxes], math.log(self.p*(self.num_classes-1)/(1-self.p)))
-        # biases
-#         print("self.regression_head.bias", self.regression_head.bias)
-#         ## todo data??
-#         # Set regression head bias all to zero
-#         nn.init.constant_(self.regression_head.bias[:], 0) # todo hvorfor ti? heler -1?
-        
-#         # Classification heas
-#         nn.init.constant_(self.classification_head.bias[:],0)
-#         nn.init.constant_(self.classification_head.bias[-1],math.log(self.p*(self.num_classes-1)/(1-self.p)))
-        
         
         else:
             layers = [*[self.regression_head], *[self.classification_head]]
-    #         layers = [*self.regression_heads, *self.classification_heads]
-            for layer in layers: # TODO droppe denne og droppe et hakk i listen?
+            for layer in layers: 
                 for param in layer.parameters():
                         if param.dim() > 1: nn.init.xavier_uniform_(param)
 

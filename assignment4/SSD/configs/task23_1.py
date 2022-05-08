@@ -1,5 +1,5 @@
 import torchvision
-from .tdt4265 import ( # TODO endre hvis mer data augmentation
+from .tdt4265 import (
     train,
     optimizer,
     schedulers,
@@ -26,7 +26,6 @@ from ssd.modeling.backbones import FPN
 
 
 backbone = L(FPN)(
-#     output_channels=[128, 256, 128, 128, 64, 64],
     output_channels=[256, 256, 256, 256, 256, 256, 256, 256],
     image_channels="${train.image_channels}",
     output_feature_sizes="${anchors.feature_sizes}"

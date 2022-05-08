@@ -29,13 +29,10 @@ def hard_negative_mining(loss, labels, neg_pos_ratio):
 
 def focal_loss(gt_labels, num_classes, confs, alpha, gamma):
     # Find paramters
-    y_k = F.one_hot(gt_labels, num_classes) # todo bare y? eller annet navn?
+    y_k = F.one_hot(gt_labels, num_classes) 
     y_k = torch.transpose(y_k, 1, 2)
-    
     p_k = F.softmax(confs,dim=1)
-    
     log_p_k = F.log_softmax(confs, dim=1)
-
     alpha_expanded = alpha.repeat(confs.shape[2], 1).T
     
     # Use formula
@@ -46,12 +43,7 @@ def focal_loss(gt_labels, num_classes, confs, alpha, gamma):
 
 
 class FocalLoss(nn.Module):
-    """
-        Implements the loss as the sum of the followings:
-        1. Confidence Loss: All labels, with hard negative mining
-        2. Localization Loss: Only on positive labels
-        Suppose input dboxes has the shape 8732x4
-    """
+
     def __init__(self, anchors, alpha, gamma, num_classes):
         super().__init__()
         self.scale_xy = 1.0/anchors.scale_xy
@@ -86,7 +78,6 @@ class FocalLoss(nn.Module):
         gt_bbox = gt_bbox.transpose(1, 2).contiguous() # reshape to [batch_size, 4, num_anchors]
         
         classification_loss = focal_loss(gt_labels, self.num_classes, confs, self.alpha, self.gamma)
-        
 
         pos_mask = (gt_labels > 0).unsqueeze(1).repeat(1, 4, 1)
         bbox_delta = bbox_delta[pos_mask]

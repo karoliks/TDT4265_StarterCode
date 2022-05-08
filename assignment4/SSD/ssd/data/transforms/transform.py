@@ -186,3 +186,16 @@ class Resize(torch.nn.Module):
     def forward(self, batch):
         batch["image"] = torchvision.transforms.functional.resize(batch["image"], self.imshape, antialias=True)
         return batch
+
+    
+# class ColorJitter(torch.nn.Module):
+
+#     def __init__(self, p=0.5) -> None:
+#         super().__init__()
+#         self.p = p
+
+#     def __call__(self, sample):
+#         image = sample["image"]
+#         colorjitter_transform = torchvision.transforms.ColorJitter()
+#         sample["image"] = colorjitter_transform(sample["image"])
+#         return sample
